@@ -1,7 +1,7 @@
 //获取应用实例
 const app = getApp()
 var base64 = require("../images/base64");
-
+import { promisify } from '../login/promisify';
 
 Page({
 
@@ -21,63 +21,69 @@ Page({
     pictures: [],
   },
 
-  loginout: function() {
-    wx.clearStorage();
-    this.setData({
-      nick: '未登录',
-      label: '点击去登录',
-      flower: '小红花 0 朵',
-      photo: '../images/pic_160.png',
-      registerTime: '',
-      userName: '',
-      wx: '',
-      lock: false,
-      btn_visible: 'display:none',
-      pictures: [],
-    })
-    app.globalData.userId = ''
-    app.globalData.nick = ''
-    app.globalData.refreshIndex = true;
+  loginout: async function() {
+    try {
+      await promisify(tt.clearStorage);
+      this.setData({
+        nick: '未登录',
+        label: '点击去登录',
+        flower: '小红花 0 朵',
+        photo: '../images/pic_160.png',
+        registerTime: '',
+        userName: '',
+        wx: '',
+        lock: false,
+        btn_visible: 'display:none',
+        pictures: [],
+      });
+      app.globalData.userId = '';
+      app.globalData.nick = '';
+      app.globalData.refreshIndex = true;
+    } catch (err) {
+      console.error('退出登录失败:', err);
+    }
   },
 
   login: function() {
     if (this.data.nick == '未登录' && this.data.label == '点击去登录') {
-      wx.navigateTo({
+      tt.navigateTo({
         url: '../login/login',
-      })
+      });
     } else {
       this.previewImage();
     }
   },
 
-  previewImage: function(e) {
-    var that = this
-    wx.previewImage({
-      //当前显示下表
-      current: this.data.pictures[0],
-      //数据源
-      urls: this.data.pictures
-    })
+  previewImage: async function() {
+    try {
+      await promisify(tt.previewImage, {
+        current: this.data.pictures[0],
+        urls: this.data.pictures
+      });
+    } catch (err) {
+      console.error('预览图片失败:', err);
+    }
   },
 
-  switchChange: function(e) {
+  switchChange: async function(e) {
     if (e.detail.value) {
-      wx.navigateTo({
+      tt.navigateTo({
         url: '../lock/lock',
-      })
+      });
     } else {
-      wx.removeStorage({
-        key: 'lock',
-        success: function(res) {},
-      })
+      try {
+        await promisify(tt.removeStorage, { key: 'lock' });
+      } catch (err) {
+        console.error('移除锁定失败:', err);
+      }
     }
   },
 
   /**
    * 生命周期函数--监听页面加载
    */
-  onLoad: function(options) {
-    
+  onLoad: function() {
+    this.loadUserInfo();
   },
 
   /**
@@ -88,90 +94,63 @@ Page({
   },
 
   help: function() {
-    wx.navigateTo({
+    tt.navigateTo({
       url: '../about/help',
-    })
+    });
   },
 
   about: function() {
-    wx.navigateTo({
+    tt.navigateTo({
       url: '../about/about',
-    })
+    });
+  },
+
+  // 加载用户信息
+  async loadUserInfo() {
+    try {
+      // 使用 Promise.all 并行获取所有存储的信息
+      const [
+        nick,
+        createdAt,
+        qmd,
+        flower,
+        photo,
+        username,
+        lock
+      ] = await Promise.all([
+        promisify(tt.getStorage, { key: 'nick' }).catch(() => ({ data: '未登录' })),
+        promisify(tt.getStorage, { key: 'createdAt' }).catch(() => ({ data: '' })),
+        promisify(tt.getStorage, { key: 'qmd' }).catch(() => ({ data: '点击去登录' })),
+        promisify(tt.getStorage, { key: 'flower' }).catch(() => ({ data: '0' })),
+        promisify(tt.getStorage, { key: 'photo' }).catch(() => ({ data: '../images/pic_160.png' })),
+        promisify(tt.getStorage, { key: 'username' }).catch(() => ({ data: '' })),
+        promisify(tt.getStorage, { key: 'lock' }).catch(() => ({ data: '' }))
+      ]);
+
+      // 更新页面数据
+      this.setData({
+        nick: nick.data,
+        registerTime: createdAt.data,
+        label: qmd.data,
+        flower: '小红花' + flower.data + '朵',
+        photo: photo.data,
+        pictures: [photo.data],
+        userName: username.data,
+        lock: lock.data?.length === 4,
+        btn_visible: nick.data !== '未登录' ? '' : 'display:none'
+      });
+
+      console.log('用户信息加载完成:', this.data);
+    } catch (err) {
+      console.error('加载用户信息失败:', err);
+    }
   },
 
   /**
    * 生命周期函数--监听页面显示
    */
   onShow: function() {
-    var that = this;
-    wx.getStorage({
-      key: 'nick',
-      success: function(res) {
-        that.setData({
-          nick: res.data,
-          btn_visible: '',
-        })
-      },
-      fail: function(e) {
-        that.setData({
-          btn_visible: 'display:none',
-        })
-      }
-    })
-    wx.getStorage({
-      key: 'createdAt',
-      success: function(res) {
-        that.setData({
-          registerTime: res.data,
-        })
-      }
-    })
-    wx.getStorage({
-      key: 'qmd',
-      success: function(res) {
-        that.setData({
-          label: res.data,
-        })
-      }
-    })
-    wx.getStorage({
-      key: 'flower',
-      success: function(res) {
-        that.setData({
-          flower: '小红花' + res.data + '朵',
-        })
-      }
-    })
-    wx.getStorage({
-      key: 'photo',
-      success: function(res) {
-        that.setData({
-          photo: res.data,
-          pictures: that.data.pictures.concat(res.data),
-        })
-      }
-    })
-    wx.getStorage({
-      key: 'username',
-      success: function(res) {
-        that.setData({
-          userName: res.data,
-        })
-      }
-    })
-    wx.getStorage({
-      key: 'lock',
-      success: function(res) {
-        that.setData({
-          lock: res.data.length == 4 ? true : false,
-        })
-      },
-      fail: function(e) {
-        that.setData({
-          lock: false,
-        })
-      }
-    })
+    this.loadUserInfo();
   },
 
   /**

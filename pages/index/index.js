@@ -1,6 +1,7 @@
 //index.js
 //获取应用实例
 const app = getApp();
+import { request, promisify } from '../login/promisify';
 
 // #d7d6dc
 Page({
@@ -32,48 +33,58 @@ Page({
     });
   },
 
-  getList: function(refresh) {
-    var that = this;
-    const query = app.globalData.API.Query("Riji");
-    query.equalTo("id", "==", app.globalData.userId);
-    query.equalTo("open", "!=", true);
-    query.equalTo("visible", "==", true);
-    query.order("-updatedAt");
-    query.limit(this.data.pageCount);
-    query.skip(this.data.pageCount * this.data.page);
-    query.find().then(res => {
-      console.log(res)
+  async getList(refresh) {
+    try {
+      // 从本地存储获取笔记列表
+      const res = await promisify(tt.getStorage, { key: 'noteList' });
+      const noteList = res.data || [];
+      
+      // 过滤当前用户的笔记
+      const userNotes = noteList.filter(note => note.userId === app.globalData.userId);
+
       if (refresh) {
-        wx.stopPullDownRefresh() //停止下拉刷新
-        for (var i = 0; i < res.length; i++) {
-          res[i]['index'] = (i + 1);
-        }
+        await promisify(tt.stopPullDownRefresh); //停止下拉刷新
+        // 添加索引
+        const listWithIndex = userNotes.map((item, index) => ({
+          ...item,
+          index: index + 1
+        }));
+
+        this.setData({
+          listData: listWithIndex,
+        });
       } else {
         this.setData({
           isHideLoadMore: true,
-        })
-        for (var i = 0; i < res.length; i++) {
-          res[i]['index'] = (this.data.listData.length + i + 1);
-        }
-      }
-      if (refresh) {
-        this.setData({
-          listData: res,
         });
-      } else {
-        if (res.length == 0) {
-          wx.showToast({
+
+        if (userNotes.length === 0) {
+          await promisify(tt.showToast, {
             title: '没有更多数据啦~',
             icon: 'none'
-          })
-          return
+          });
+          return;
         }
+
+        // 添加索引
+        const newItems = userNotes.map((item, index) => ({
+          ...item,
+          index: this.data.listData.length + index + 1
+        }));
+
         this.setData({
-          listData: this.data.listData.concat(res),
-        })
+          listData: this.data.listData.concat(newItems),
+        });
       }
-      that.data.page++;
-    });
+
+      this.data.page++;
+    } catch (err) {
+      console.error('获取列表失败:', err);
+      await promisify(tt.showToast, {
+        title: '获取数据失败',
+        icon: 'none'
+      });
+    }
   },
 
   onPullDownRefresh: function() {
@@ -119,104 +130,108 @@ Page({
     })
   },
 
-  onMenu: function(e) {
-    var that = this;
-    console.log(e)
-    var index = e.currentTarget.dataset.index;
-    wx.showActionSheet({
-      itemList: ['编辑', '删除', '复制'],
-      success: function(res) {
-        console.log(res.tapIndex)
-        switch (res.tapIndex) {
-          case 0:
-            wx.showToast({
-              title: '编辑功能暂未开放~',
-              icon: 'none'
-            })
-            break;
-          case 1:
-            const query = app.globalData.API.Query('Riji');
-            query.destroy(e.currentTarget.dataset.objectid).then(res => {
-              console.log(res)
-              wx.showToast({
-                title: '删除成功~',
-              })
-              that.data.listData.splice(e.currentTarget.dataset.index - 1, 1)
-              for (var i = 0; i < that.data.listData.length; i++) {
-                that.data.listData[i]['index'] = (i + 1);
-              }
-              that.setData({
-                listData: that.data.listData
-              });
-            }).catch(err => {
-              console.log(err)
-            })
-            break;
-          case 2:
-            console.log(res)
-            wx.showToast({
-              title: '复制成功~',
-            })
-            wx.setClipboardData({
-              data: that.data.listData[index - 1].content,
-              success: function(res) {
-                console.log(res)
-              }
-            })
-            break;
-        }
-      },
-      fail: function(res) {
-        console.log(res.errMsg)
-        wx.showActionSheet({
+  async onMenu(e) {
+    const that = this;
+    const index = e.currentTarget.dataset.index;
+    const objectId = e.currentTarget.dataset.objectid;
 
-        })
+    try {
+      const { tapIndex } = await promisify(tt.showActionSheet, {
+        itemList: ['编辑', '删除', '复制']
+      });
+
+      switch (tapIndex) {
+        case 0:
+          await promisify(tt.showToast, {
+            title: '编辑功能暂未开放~',
+            icon: 'none'
+          });
+          break;
+        case 1:
+          // 删除笔记
+          const deleteRes = await request({
+            url: '/api/note/delete',
+            method: 'POST',
+            data: {
+              noteId: objectId
+            }
+          });
+
+          if (deleteRes.data.success) {
+            await promisify(tt.showToast, {
+              title: '删除成功~',
+            });
+            // 更新列表
+            that.data.listData.splice(index - 1, 1);
+            that.data.listData.forEach((item, i) => {
+              item.index = i + 1;
+            });
+            that.setData({
+              listData: that.data.listData
+            });
+          }
+          break;
+        case 2:
+          await promisify(tt.showToast, {
+            title: '复制成功~',
+          });
+          await promisify(tt.setClipboardData, {
+            data: that.data.listData[index - 1].content
+          });
+          break;
       }
-    })
+    } catch (err) {
+      console.error('操作失败:', err);
+    }
   },
 
   toWrite: function() {
-    if (app.globalData.userId.length < 1) {
-      wx.showToast({
+    // 从本地存储获取用户ID
+    const userId = tt.getStorageSync('userId');
+    if (!userId) {
+      tt.showToast({
         title: '请登录~',
         icon: 'none'
-      })
-      return
+      });
+      return;
     }
-    wx.navigateTo({
-      url: '../write/write',
-      success: function() {},
-      fail: function() {},
-      complete: function() {}
-    })
+    tt.navigateTo({
+      url: '../write/write'
+    });
   },
   onLoad: function() {
     if (app.globalData.lockCount > 0) {
-      return
+      return;
     }
-    wx.getStorage({
-      key: 'userId',
-      success: function(res) {
-        app.globalData.userId = res.data;
-      },
-    })
+    // 从本地存储获取用户信息
+    try {
+      const userId = tt.getStorageSync('userId');
+      if (userId) {
+        app.globalData.userId = userId;
+        this.setData({
+          visible: 'display:none'
+        });
+      } else {
+        this.setData({
+          visible: ''
+        });
+      }
+    } catch (err) {
+      console.error('获取用户信息失败:', err);
+    }
     this.isLock();
   },
 
   isLock: function() {
-    wx.getStorage({
-      key: 'lock',
-      success: function(res) {
-        console.log(res.data)
-        if (res.data.length > 0) {
-          wx.redirectTo({
-            url: '../unlock/unlock',
-          })
-        }
-      },
-      fail: function(e) {
-        console.log(e)
+    try {
+      const lock = tt.getStorageSync('lock');
+      if (lock && lock.length > 0) {
+        tt.redirectTo({
+          url: '../unlock/unlock',
+        });
       }
-    })
+    } catch (err) {
+      console.error('检查锁定状态失败:', err);
+    }
   },
 })

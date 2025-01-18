@@ -1,3 +1,6 @@
+// 引入 promisify 工具
+import { promisify, request } from './promisify';
+
 //获取应用实例
 const app = getApp();
 
@@ -6,7 +9,10 @@ Page({
     phone: '',
     password: '',
     user: {},
-    imageUrl: '../images/ic_launcher.png'
+    imageUrl: '../images/ic_launcher.png',
+    douyin_code: '',
+    isDeveloperServerLogin: false,  // 是否登录开发者服务端
+    isDouyinLogin: false,  // 是否登录抖音主端
   },
 
   // 获取输入账号 
@@ -17,13 +23,14 @@ Page({
   },
 
   onShow: function() {
-
+    // 页面显示时尝试静默登录
+    this.silentLogin(false);
   },
 
   register: function() {
-    wx.navigateTo({
+    tt.navigateTo({
       url: '../register/register',
-    })
+    });
   },
 
   // 获取输入密码 
@@ -32,211 +39,178 @@ Page({
       password: e.detail.value
     })
   },
-  getUserInfo: function(e) {
-    console.log(e)
-    app.globalData.userInfo = e.detail.userInfo
-    this.setData({
-      userInfo: e.detail.userInfo,
-      hasUserInfo: true
-    })
 
-    this.getOpenId();
-    wx.showToast({
-      title: '授权成功',
-      icon: 'none',
-      duration: 1000,
-    })
-    setTimeout(function() {
-      wx.switchTab({
-        url: '../center/center',
-      })
-    }, 1000);
-  },
-
-  getOpenId: function() {
-    var that = this;
-    wx.request({
-      url: 'https://api.weixin.qq.com/sns/jscode2session',
-      data: {
-        appid: '',
-        secret: '',
-        js_code: app.globalData.code,
-        grant_type: 'authorization_code',
-      },
-      header: {
-        'content-type': 'application/json'
-      },
-      success: function(res) {
-        console.log(res.data)
-        if (res.data.errcode == 40163) {
-          wx.showToast({
-            title: '获取ID失败，稍后再试',
-            icon: 'none'
-          })
-          return
+  async queryUser(openId) {
+    try {
+      const res = await request({
+        url: '/api/user/query',
+        method: 'POST',
+        data: {
+          openId: openId,
+          username: '8@qq.com'  // 这里可能需要修改为动态值
         }
-        that.queryUser(res.data.openid);
-      },
-      fail: function(e) {
-        console.log('请求失败：' + e)
-      }
-    })
-  },
+      });
 
-  queryUser: function(openId) {
-    const query = API.Query("_User");
-    query.equalTo("username", "==", '8@qq.com');
-    console.log("openId:" + openId);
-    query.find().then(res => {
-      console.log(res);
-      if (res.length == 0) {
-        wx.showToast({
-          title: '可以注册',
-          icon: 'success',
-          duration: 1000
-        })
-        this.register();
-      } else {
-        wx.showToast({
+      console.log("查询用户结果:", res.data);
+      
+      if (res.data.exists) {
+        await promisify(tt.showToast, {
           title: '已被注册',
           icon: 'none',
           duration: 1000
-        })
+        });
+      } else {
+        await promisify(tt.showToast, {
+          title: '可以注册',
+          icon: 'success',
+          duration: 1000
+        });
+        this.register();
       }
-    });
-  },
-
-  // login_wx: function() {
-  //   wx.getSetting({
-  //     success(res) {
-  //       if (!res.authSetting['scope.userInfo']) {
-  //         wx.authorize({
-  //           scope: 'scope.userInfo',
-  //           success() {
-  //             console.log('授权成功')
-  //             wx.getUserInfo({
-  //               success: res => {
-  //                 // 可以将 res 发送给后台解码出 unionId
-  //                 this.globalData.userInfo = res.userInfo
-  //                 // 由于 getUserInfo 是网络请求，可能会在 Page.onLoad 之后才返回
-  //                 // 所以此处加入 callback 以防止这种情况
-  //                 if (this.userInfoReadyCallback) {
-  //                   this.userInfoReadyCallback(res)
-  //                 }
-  //                 console.log(res)
-  //                 wx.showToast({
-  //                   title: '授权成功' + res.userInfo,
-  //                   icon: 'none',
-  //                   duration: 1000,
-  //                 })
-  //               }
-  //             })
-  //           }
-  //         })
-  //       }
-  //     }
-  //   })
-  // },
-
-  // 登录 
-  login: function() {
-    if (this.data.phone.length == 0 || this.data.password.length == 0) {
-      wx.showToast({
-        title: '不能为空',
+    } catch (err) {
+      console.error('查询用户失败:', err);
+      await promisify(tt.showToast, {
+        title: '查询失败',
         icon: 'none',
         duration: 1000
-      })
-    } else {
-      // 先调用抖音登录
-      tt.login({
-        force: true,
-        success: (res) => {
-          console.log(`login 调用成功${res.code} ${res.anonymousCode}`);
-          // 抖音登录成功后继续原有的登录流程
-          this.loginAPI();
-        },
-        fail: (res) => {
-          console.log(`login 调用失败`);
-          wx.showToast({
-            title: '登录失败',
-            icon: 'none',
-            duration: 1000
-          })
-        },
       });
     }
   },
-  loginAPI: function() {
-    API.User.login(this.data.phone, this.data.password).then(res => {
-      console.log(res),
-        this.setData({
-          user: res,
-        })
-      console.log(this.data.user)
-      this.saveUserInfo();
-      wx.showToast({
-        title: '登录成功',
-        icon: 'success',
-        duration: 1000
-      })
-      setTimeout(function() {
-        wx.switchTab({
-          url: '../center/center',
-        })
-      }, 1000);
-    }).catch(err => {
-      console.log(err)
-      wx.showToast({
-        title: '' + err.error,
+
+  // 静默登录
+  async silentLogin(force = false) {
+    if (this.data.isDeveloperServerLogin) {
+      return;
+    }
+    
+    let loginData = null;
+    try {
+      // 是否强制调起抖音的登录窗口
+      loginData = await promisify(tt.login, { force });
+      this.setData({ isDouyinLogin: loginData.isLogin });
+      console.log('抖音登录结果:', loginData);
+      
+      if (this.data.isDouyinLogin && loginData.code) {
+        const loginSuccess = await this.loginToDeveloperServer(loginData.code);
+        if (loginSuccess) {
+          // 登录成功后跳转
+          setTimeout(() => {
+            tt.switchTab({
+              url: '../center/center',
+            });
+          }, 1000);
+        }
+      }
+    } catch (err) {
+      console.error('登录失败:', err);
+      if (!force) { // 只在非强制登录时隐藏错误提示
+        return false;
+      }
+      await promisify(tt.showToast, {
+        title: err.message || '登录失败',
         icon: 'none',
         duration: 1000
-      })
-    });
+      });
+      return false;
+    }
+    
+    return this.data.isDouyinLogin;
   },
-  saveUserInfo: function() {
-    app.globalData.user = this.data.user;
-    wx.setStorage({
-      key: 'userId',
-      data: this.data.user.objectId,
-    })
-    wx.setStorage({
-      key: "nick",
-      data: this.data.user.nick,
-    })
-    wx.setStorage({
-      key: "qmd",
-      data: this.data.user.qmd,
-    })
-    wx.setStorage({
-      key: "flower",
-      data: this.data.user.flower,
-    })
-    wx.setStorage({
-      key: "username",
-      data: this.data.user.username,
-    })
-    wx.setStorage({
-      key: "password",
-      data: this.data.password,
-    })
-    wx.setStorage({
-      key: "photo",
-      data: this.data.user.photo,
-    })
-    wx.setStorage({
-      key: "sex",
-      data: this.data.user.sex,
-    })
-    wx.setStorage({
-      key: "date",
-      data: this.data.user.birthday,
-    })
-    wx.setStorage({
-      key: "createdAt",
-      data: this.data.user.createdAt,
-    })
-    app.globalData.userId = this.data.user.objectId;
-    app.globalData.nick = this.data.user.nick;
+
+  // 手动登录按钮点击
+  async login() {
+    // 直接调用 silentLogin，但强制显示登录窗口
+    await this.silentLogin(true);
+  },
+
+  // 请求开发者服务器登录
+  async loginToDeveloperServer(code) {
+    try {
+      await promisify(tt.showLoading, { title: '登录中...' });
+      const res = await request({
+        url: '/api/apps/login',
+        method: 'POST',
+        data: {
+          code: code
+        }
+      });
+
+      console.log('开发者服务器登录响应:', res.data);
+      
+      if (res.data.errCode === 0) {
+        // 保存登录凭证
+        tt.setStorageSync('token', res.data.token);
+        tt.setStorageSync('openid', res.data.openid);
+        tt.setStorageSync('unionid', res.data.unionid);
+        
+        // 重要：设置全局用户ID
+        app.globalData.userId = res.data.openid;
+        tt.setStorageSync('userId', res.data.openid);
+        
+        // 设置登录状态
+        this.setData({ 
+          isDeveloperServerLogin: true,
+          user: {
+            objectId: res.data.openid,
+            // 其他用户信息...
+          }
+        });
+        
+        // 保存用户信息
+        await this.saveUserInfo();
+        
+        await promisify(tt.showToast, {
+          title: res.data.errMsg || '登录成功',
+          icon: 'success',
+          duration: 1000
+        });
+        
+        // 设置全局刷新标志
+        app.globalData.refreshIndex = true;
+        
+        return true;
+      } else {
+        throw new Error(res.data.errMsg || '登录失败');
+      }
+    } catch (err) {
+      console.error('服务器登录失败:', err);
+      await promisify(tt.showToast, {
+        title: err.message || '登录失败',
+        icon: 'none',
+        duration: 1000
+      });
+      return false;
+    } finally {
+      await promisify(tt.hideLoading);
+    }
+  },
+
+  // 保存用户信息
+  async saveUserInfo() {
+    const userInfo = {
+      objectId: tt.getStorageSync('openid'),
+      nick: '抖音用户',  // 可以从抖音获取的用户信息中获取
+      qmd: '这个人很懒，什么都没写',
+      flower: '0',
+      photo: '../images/pic_160.png',
+      username: tt.getStorageSync('openid'),
+      createdAt: new Date().toISOString()
+    };
+    
+    app.globalData.user = userInfo;
+    app.globalData.userId = userInfo.objectId;
+    app.globalData.nick = userInfo.nick;
     app.globalData.refreshIndex = true;
+    
+    // 保存所有用户相关信息
+    await Promise.all([
+      promisify(tt.setStorage, { key: 'userId', data: userInfo.objectId }),
+      promisify(tt.setStorage, { key: 'nick', data: userInfo.nick }),
+      promisify(tt.setStorage, { key: 'qmd', data: userInfo.qmd }),
+      promisify(tt.setStorage, { key: 'flower', data: userInfo.flower }),
+      promisify(tt.setStorage, { key: 'photo', data: userInfo.photo }),
+      promisify(tt.setStorage, { key: 'username', data: userInfo.username }),
+      promisify(tt.setStorage, { key: 'createdAt', data: userInfo.createdAt })
+    ]);
   },
 })

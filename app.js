@@ -10,36 +10,41 @@ App({
   },
   onLaunch: function() {
     var that = this;
-    // 登录
-    wx.login({
-      success: res => {
-        // 发送 res.code 到后台换取 openId, sessionKey, unionId
-        this.globalData.code = res.code;
-      }
-    })
-
-    wx.getStorage({
-      key: 'userId',
-      success: function(res) {
-        that.globalData.userId = res.data;
-      },
-    })
-    wx.getStorage({
-      key: 'nick',
-      success: function(res) {
-        that.globalData.nick = res.data;
-      },
-    })
-    wx.getSystemInfo({
+    
+    // 获取系统信息
+    tt.getSystemInfo({
       success: function(res) {
         that.globalData.platform = res.platform;
         that.globalData.windowHeight = res.windowHeight;
       }
-    })
+    });
+
+    // 启动时检查登录状态
+    try {
+      // 从本地存储获取用户信息
+      const [userId, nick] = [
+        tt.getStorageSync('userId'),
+        tt.getStorageSync('nick')
+      ];
+      
+      if (userId) {
+        this.globalData.userId = userId;
+        this.globalData.nick = nick || '';
+        this.globalData.refreshIndex = true;
+        
+        console.log('已获取到用户信息:', {
+          userId: this.globalData.userId,
+          nick: this.globalData.nick
+        });
+      } else {
+        console.log('未找到用户登录信息');
+      }
+    } catch (err) {
+      console.error('检查登录状态失败:', err);
+    }
   },
   globalData: {
     userInfo: null,
-    code: '',
     userId: '',
     nick: '',
     platform: '',
