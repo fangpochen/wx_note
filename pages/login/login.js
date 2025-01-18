@@ -6,6 +6,7 @@ Page({
     phone: '',
     password: '',
     user: {},
+    imageUrl: '../images/ic_launcher.png'
   },
 
   // 获取输入账号 
@@ -146,8 +147,23 @@ Page({
         duration: 1000
       })
     } else {
-      // 这里修改成跳转的页面 
-      this.loginAPI();
+      // 先调用抖音登录
+      tt.login({
+        force: true,
+        success: (res) => {
+          console.log(`login 调用成功${res.code} ${res.anonymousCode}`);
+          // 抖音登录成功后继续原有的登录流程
+          this.loginAPI();
+        },
+        fail: (res) => {
+          console.log(`login 调用失败`);
+          wx.showToast({
+            title: '登录失败',
+            icon: 'none',
+            duration: 1000
+          })
+        },
+      });
     }
   },
   loginAPI: function() {

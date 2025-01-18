@@ -4,6 +4,7 @@ Page({
   data: {
     phone: '',
     password: '',
+    imageStyle: 'display: flex; justify-content: center; align-items: center;'
   },
 
 

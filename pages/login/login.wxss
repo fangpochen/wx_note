@@ -5,12 +5,18 @@ page {
 
 .container {
   width: 100%;
-  height: 100%;
   display: flex;
   flex-direction: column;
-  padding: 0;
+  align-items: center;
+  padding: 0 30rpx;
   box-sizing: border-box;
-  background-color: #f2f2f2;
+}
+
+.logo-container {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  margin: 60rpx 0;
 }
 
 /*登录图片*/
@@ -20,9 +26,9 @@ page {
 }
 
 .login-img {
-  margin-top: 200rpx;
-  width: 160rpx;
-  height: 160rpx;
+  width: 200rpx;
+  height: 200rpx;
+  border-radius: 20rpx;
 }
 
 .login-box {
@@ -118,15 +124,45 @@ page {
 }
 
 .register-box {
+  width: 100%;
   display: flex;
-  flex-flow: column;
-  justify-content: right;
+  justify-content: flex-end;
+  margin-top: 20rpx;
 }
 
 .register {
-  text-align: right;
-  padding: 10px;
-  color: rgb(105, 104, 104);
-  font-size: 15px;
-  align-items: right;
+  color: #666;
+  font-size: 28rpx;
+  padding: 20rpx 0;
+}
+
+.input-container {
+  width: 100%;
+  padding: 20rpx 0;
+}
+
+.input-row {
+  margin-bottom: 20rpx;
+}
+
+.input-row text {
+  font-size: 28rpx;
+  color: #333;
+}
+
+.input-row input {
+  border-bottom: 1rpx solid #ddd;
+  padding: 20rpx 0;
+  font-size: 28rpx;
+}
+
+.login-btn {
+  width: 100%;
+  height: 88rpx;
+  background: #ff4d4f;
+  color: #fff;
+  border-radius: 44rpx;
+  margin-top: 60rpx;
+  font-size: 32rpx;
+  line-height: 88rpx;
 }
